@@ -32,6 +32,23 @@ class NativeBleService {
       await _methods.invokeMethod<bool>('hasBlePermissions') ?? false;
   Future<void> startScan() => _methods.invokeMethod<void>('startScan');
   Future<void> stopScan() => _methods.invokeMethod<void>('stopScan');
+  Future<void> startBackgroundDriving({
+    required String vehicleType,
+    required String vehicleColor,
+    required String plateNumber,
+    required bool temporaryEmergency,
+    required int temporaryExpiresAt,
+  }) => _methods.invokeMethod<void>('startBackgroundDriving', {
+    'vehicleType': vehicleType,
+    'vehicleColor': vehicleColor,
+    'plateNumber': plateNumber,
+    'temporaryEmergency': temporaryEmergency,
+    'temporaryExpiresAt': temporaryExpiresAt,
+  });
+  Future<void> stopBackgroundDriving() =>
+      _methods.invokeMethod<void>('stopBackgroundDriving');
+  Future<bool> isBackgroundDriving() async =>
+      await _methods.invokeMethod<bool>('isBackgroundDriving') ?? false;
   Future<void> startAdvertising(List<int> packet) =>
       _methods.invokeMethod<void>('startAdvertising', {'packet': packet});
   Future<void> stopAdvertising() =>

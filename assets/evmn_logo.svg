@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <title>EVMN Bluetooth road emblem</title>
+  <circle cx="256" cy="256" r="201" stroke="#151525" stroke-width="48" stroke-linecap="round" stroke-dasharray="1015 248" transform="rotate(-145 256 256)"/>
+  <circle cx="256" cy="256" r="135" stroke="#09A957" stroke-width="56" stroke-linecap="round" stroke-dasharray="660 188" transform="rotate(40 256 256)"/>
+  <path d="M218 407 239 218h34l21 189h-76Z" fill="#151525"/>
+  <path d="m250 244 12 19h-14l2-19Zm-5 36h18l3 23h-24l3-23Zm-6 43h30l4 27h-38l4-27Zm-6 46h42l3 28h-48l3-28Z" fill="#fff"/>
+  <circle cx="256" cy="202" r="46" fill="#fff"/>
+  <circle cx="256" cy="202" r="40" fill="#1686D9"/>
+  <path d="m256 174 23 18-23 15 23 17-23 16m0-66v66m-20-52 20 19-20 19" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

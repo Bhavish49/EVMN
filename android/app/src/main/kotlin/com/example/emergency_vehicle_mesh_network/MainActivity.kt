@@ -34,6 +34,22 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
         private const val REQUEST_BLE_PERMISSIONS = 9174
         // 0xFFFF is reserved by the Bluetooth SIG for internal testing only.
         private const val TEST_MANUFACTURER_ID = 0xFFFF
+        @Volatile private var drivingModeEventSink: EventChannel.EventSink? = null
+        @Volatile private var pendingDrivingStartResult: MethodChannel.Result? = null
+
+        fun emitDrivingMode(enabled: Boolean) {
+            drivingModeEventSink?.success(mapOf("type" to "drivingMode", "enabled" to enabled))
+        }
+
+        fun completeDrivingStart() {
+            pendingDrivingStartResult?.success(null)
+            pendingDrivingStartResult = null
+        }
+
+        fun failDrivingStart(message: String) {
+            pendingDrivingStartResult?.error("DRIVING_SERVICE_FAILED", message, null)
+            pendingDrivingStartResult = null
+        }
     }
 
     private var eventSink: EventChannel.EventSink? = null
@@ -71,6 +87,48 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
                 "hasBlePermissions" -> result.success(hasBlePermissions())
                 "isBluetoothEnabled" -> result.success(isBluetoothEnabled())
                 "requestPermissions" -> requestBlePermissions(result)
+                "isBackgroundDriving" -> {
+                    val savedEnabled = getSharedPreferences("driving_mode", MODE_PRIVATE)
+                        .getBoolean("enabled", false)
+                    val running = (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager)
+                        .getRunningServices(Int.MAX_VALUE)
+                        .any { it.service.className == DrivingModeService::class.java.name }
+                    if (!running && savedEnabled) {
+                        getSharedPreferences("driving_mode", MODE_PRIVATE).edit()
+                            .putBoolean("enabled", false).apply()
+                    }
+                    result.success(savedEnabled && running)
+                }
+                "startBackgroundDriving" -> {
+                    if (!hasBlePermissions()) {
+                        result.error("PERMISSION_DENIED", "Grant nearby-device permissions first.", null)
+                    } else {
+                        try {
+                            val intent = android.content.Intent(this, DrivingModeService::class.java).apply {
+                                action = DrivingModeService.ACTION_START
+                                putExtra("vehicleType", call.argument<String>("vehicleType") ?: "Sedan")
+                                putExtra("vehicleColor", call.argument<String>("vehicleColor") ?: "Other")
+                                putExtra("plateNumber", call.argument<String>("plateNumber") ?: "")
+                                putExtra("temporaryEmergency", call.argument<Boolean>("temporaryEmergency") ?: false)
+                                putExtra("temporaryExpiresAt", call.argument<Number>("temporaryExpiresAt")?.toLong() ?: 0L)
+                            }
+                            pendingDrivingStartResult = result
+                            ContextCompat.startForegroundService(this, intent)
+                        } catch (exception: Exception) {
+                            pendingDrivingStartResult = null
+                            result.error("DRIVING_SERVICE_FAILED", exception.message, null)
+                        }
+                    }
+                }
+                "stopBackgroundDriving" -> {
+                    val intent = android.content.Intent(this, DrivingModeService::class.java).apply {
+                        action = DrivingModeService.ACTION_STOP
+                    }
+                    startService(intent)
+                    getSharedPreferences("driving_mode", MODE_PRIVATE).edit()
+                        .putBoolean("enabled", false).apply()
+                    result.success(null)
+                }
                 "readVehicleProfile" -> {
                     val profile = getSharedPreferences("vehicle_profile", MODE_PRIVATE)
                     result.success(mapOf(
@@ -127,9 +185,13 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL).setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                 eventSink = events
+                drivingModeEventSink = events
                 events?.success(mapOf("type" to "tts", "ready" to ttsReady))
             }
-            override fun onCancel(arguments: Any?) { eventSink = null }
+            override fun onCancel(arguments: Any?) {
+                eventSink = null
+                drivingModeEventSink = null
+            }
         })
     }
 
@@ -139,7 +201,10 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
         } else {
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
         }
-        val missing = requested.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
+        val permissionsToAsk = requested.toMutableList().apply {
+            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        val missing = permissionsToAsk.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) result.success(true)
         else {
             pendingPermissionResult = result
@@ -150,7 +215,7 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_BLE_PERMISSIONS) {
-            val granted = grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+            val granted = hasBlePermissions()
             pendingPermissionResult?.success(granted)
             pendingPermissionResult = null
         }

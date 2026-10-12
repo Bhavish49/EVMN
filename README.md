@@ -9,7 +9,7 @@ EVMN is an offline-first Flutter prototype that exchanges emergency-awareness al
 - Automatically broadcasts while Driving Mode is active for an ambulance profile or an activated temporary emergency vehicle.
 - Sends the emergency type, a short-lived message ID, expiry, forwarding limits, and compact vehicle colour/plate details in a 24-byte BLE manufacturer-data message. Receives older 10-byte messages as generic alerts.
 - Plays a brief two-beep attention cue, waits one second, then uses installed offline speech to announce the alert on Android and Windows.
-- Deduplicates, expires, and relays eligible alerts while the app is open.
+- Deduplicates, expires, and relays eligible alerts while Driving Mode is enabled.
 - Keeps a local event history. It does not use a server or account.
 
 ## Requirements
@@ -22,11 +22,11 @@ EVMN is an offline-first Flutter prototype that exchanges emergency-awareness al
 
 ## Run
 
-Fetch Flutter dependencies, then launch on a supported target:
 ### Download for Android
 
-Download the latest Android APK from [GitHub Releases](https://github.com/Bhavish49/EVMN/releases/latest). Each release must include an APK asset for the download link to work. If no release is available yet, build a debug APK locally with `flutter build apk --debug`; the APK is created at `build/app/outputs/flutter-apk/app-debug.apk`.
+Download the latest Android APK directly from [GitHub Releases](https://github.com/Bhavish49/EVMN/releases/latest/download/app-release.apk). If no APK is available yet, build one locally with `flutter build apk --release`; it is created at `build/app/outputs/flutter-apk/app-release.apk`.
 
+Fetch Flutter dependencies, then launch on a supported target:
 
 ```powershell
 flutter pub get
@@ -40,7 +40,7 @@ For Android, connect a BLE-capable phone with USB debugging enabled and run:
 flutter run -d <android-device-id>
 ```
 
-Grant nearby-device permissions and enable Bluetooth. Keep the app open on the devices during a demonstration. On Home, turn on Driving Mode. A normal vehicle listens for alerts; an ambulance profile or an activated temporary emergency vehicle also broadcasts while Driving Mode is on. The alert uses the sender's saved vehicle details. The receiver plays the cue and reads the alert aloud using local speech when available.
+Grant nearby-device permissions and enable Bluetooth. On Home, turn on Driving Mode. A normal vehicle listens for alerts; an ambulance profile or an activated temporary emergency vehicle also broadcasts while Driving Mode is on. On Android, Driving Mode runs in a foreground service with an ongoing notification, so BLE listening, emergency broadcasts, alert forwarding, and offline voice can continue when the screen is locked or the app is dismissed from Recents. Turn Driving Mode off in the app or use the notification's **Turn off** action. Android may stop background work if the user force-stops the app, disables Bluetooth, revokes permissions, or the device restricts background activity. Windows continues while the app is minimized, but closing the Windows app ends its process and BLE work.
 
 Windows speech uses the installed Windows SAPI voice. Android speech uses Android TextToSpeech and requires offline voice data for offline operation. BLE support is implemented for Android and Windows; web, iOS, Linux, and macOS are not supported by the current BLE implementation.
 
@@ -60,7 +60,7 @@ flutter build windows
 ## Safety and prototype limitations
 
 - BLE alerts are unauthenticated and can be spoofed. Do not rely on them for emergency response or make sudden driving decisions based on an alert.
-- BLE advertisements are connectionless and delivery is not guaranteed. Keep the application active; background scanning and relaying are not implemented.
+- BLE advertisements are connectionless and delivery is not guaranteed. Android background operation uses a foreground service and visible ongoing notification; it is not a guarantee against force-stop, radio shutdown, or manufacturer-specific battery restrictions. Windows has no separate background service when its app process is closed.
 - Temporary emergency authorization is a local development-token simulation, not approval from an emergency authority. Its signing key is held in memory and does not establish trust between separate devices.
 - The Bluetooth manufacturer identifier `0xFFFF` is reserved for internal testing. This prototype must remain a controlled demonstration and should not be deployed as a public safety service.
 - Vehicle details are carried in an unsigned packet. Do not include information that should remain private.

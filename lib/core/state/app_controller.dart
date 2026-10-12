@@ -20,6 +20,7 @@ class AppState {
     this.bleRuntime = false,
     this.scanning = false,
     this.drivingMode = false,
+    this.drivingModeStarting = false,
     this.advertising = false,
     this.bluetoothSupported = false,
     this.bluetoothPermissionsGranted = false,
@@ -40,6 +41,7 @@ class AppState {
   final bool bleRuntime;
   final bool scanning;
   final bool drivingMode;
+  final bool drivingModeStarting;
   final bool advertising;
   final bool bluetoothSupported;
   final bool bluetoothPermissionsGranted;
@@ -60,6 +62,7 @@ class AppState {
     bool? bleRuntime,
     bool? scanning,
     bool? drivingMode,
+    bool? drivingModeStarting,
     bool? advertising,
     bool? bluetoothSupported,
     bool? bluetoothPermissionsGranted,
@@ -80,6 +83,7 @@ class AppState {
     bleRuntime: bleRuntime ?? this.bleRuntime,
     scanning: scanning ?? this.scanning,
     drivingMode: drivingMode ?? this.drivingMode,
+    drivingModeStarting: drivingModeStarting ?? this.drivingModeStarting,
     advertising: advertising ?? this.advertising,
     bluetoothSupported: bluetoothSupported ?? this.bluetoothSupported,
     bluetoothPermissionsGranted:
@@ -128,6 +132,20 @@ class AppController extends Notifier<AppState> {
       );
     } on Object catch (error) {
       state = state.copyWith(status: 'Could not load vehicle profile: $error');
+    }
+    if (_ble.isNativeAndroid) {
+      try {
+        final backgroundDriving = await _ble.isBackgroundDriving();
+        if (backgroundDriving) {
+          state = state.copyWith(
+            drivingMode: true,
+            scanning: true,
+            status: 'Driving Mode is active in the background.',
+          );
+        }
+      } on PlatformException catch (_) {
+        // Older installs may not yet contain the background service channel.
+      }
     }
     if (!_ble.isBlePlatform) {
       state = state.copyWith(
@@ -227,13 +245,22 @@ class AppController extends Notifier<AppState> {
 
   Future<void> setDrivingMode(bool enabled) async {
     if (!enabled) {
+      state = state.copyWith(
+        drivingModeStarting: false,
+        status: 'Stopping Driving Mode…',
+      );
       try {
         _emergencyRefreshTimer?.cancel();
         _emergencyRefreshTimer = null;
-        if (state.scanning) await _ble.stopScan();
+        if (_ble.isNativeAndroid) {
+          await _ble.stopBackgroundDriving();
+        } else if (state.scanning) {
+          await _ble.stopScan();
+        }
         if (state.advertising) await _ble.stopAdvertising();
         state = state.copyWith(
           drivingMode: false,
+          drivingModeStarting: false,
           scanning: false,
           advertising: false,
           status: 'Driving Mode is off. Nearby scanning has stopped.',
@@ -241,6 +268,7 @@ class AppController extends Notifier<AppState> {
       } on PlatformException catch (error) {
         state = state.copyWith(
           drivingMode: false,
+          drivingModeStarting: false,
           scanning: false,
           status: 'Could not stop nearby scanning: ${error.message ?? error.code}',
         );
@@ -251,11 +279,16 @@ class AppController extends Notifier<AppState> {
     if (!_ble.isBlePlatform) {
       state = state.copyWith(
         drivingMode: false,
+        drivingModeStarting: false,
         status: 'Nearby scanning requires an Android phone or Windows laptop.',
       );
       return;
     }
 
+    state = state.copyWith(
+      drivingModeStarting: true,
+      status: 'Starting Driving Mode…',
+    );
     try {
       final granted = await _ble.requestPermissions();
       final enabled = granted && await _ble.isBluetoothEnabled();
@@ -266,6 +299,7 @@ class AppController extends Notifier<AppState> {
       if (!granted || !enabled) {
         state = state.copyWith(
           drivingMode: false,
+          drivingModeStarting: false,
           scanning: false,
           status: !granted
               ? 'Nearby-device permission is required for Driving Mode.'
@@ -273,9 +307,32 @@ class AppController extends Notifier<AppState> {
         );
         return;
       }
+      if (_ble.isNativeAndroid) {
+        final temporaryEmergency = state.role == 'Temporary Patient Transport' &&
+            state.activeToken != null &&
+            await _tokens.verify(state.activeToken!, vehicleId: state.vehicleId);
+        await _ble.startBackgroundDriving(
+          vehicleType: state.vehicleType,
+          vehicleColor: state.vehicleColor,
+          plateNumber: state.plateNumber,
+          temporaryEmergency: temporaryEmergency,
+          temporaryExpiresAt: temporaryEmergency
+              ? state.activeToken!.expiresAt.millisecondsSinceEpoch
+              : 0,
+        );
+        state = state.copyWith(
+          drivingMode: true,
+          drivingModeStarting: false,
+          scanning: true,
+          advertising: state.vehicleType.toLowerCase() == 'ambulance' || temporaryEmergency,
+          status: 'Driving Mode is active in the background.',
+        );
+        return;
+      }
       await _ble.startScan();
       state = state.copyWith(
         drivingMode: true,
+        drivingModeStarting: false,
         scanning: true,
         status: 'Driving Mode is on. Listening for nearby emergency alerts.',
       );
@@ -293,8 +350,17 @@ class AppController extends Notifier<AppState> {
     } on PlatformException catch (error) {
       state = state.copyWith(
         drivingMode: false,
+        drivingModeStarting: false,
         scanning: false,
         status: 'Driving Mode could not start: ${error.message ?? error.code}',
+      );
+    } on Object catch (error) {
+      state = state.copyWith(
+        drivingMode: false,
+        drivingModeStarting: false,
+        scanning: false,
+        advertising: false,
+        status: 'Driving Mode could not start: $error',
       );
     }
   }
@@ -423,6 +489,15 @@ class AppController extends Notifier<AppState> {
     _emergencyRefreshTimer?.cancel();
     _emergencyRefreshTimer = null;
     try {
+      if (_ble.isNativeAndroid && state.drivingMode) {
+        await _ble.startBackgroundDriving(
+          vehicleType: state.vehicleType,
+          vehicleColor: state.vehicleColor,
+          plateNumber: state.plateNumber,
+          temporaryEmergency: false,
+          temporaryExpiresAt: 0,
+        );
+      }
       if (state.vehicleType.toLowerCase() != 'ambulance' && state.advertising) {
         await _ble.stopAdvertising();
       }
@@ -513,6 +588,19 @@ class AppController extends Notifier<AppState> {
   }
 
   void _onBleEvent(Map<String, Object?> event) {
+    if (event['type'] == 'drivingMode') {
+      final enabled = event['enabled'] == true;
+      state = state.copyWith(
+        drivingMode: enabled,
+        drivingModeStarting: false,
+        scanning: enabled,
+        advertising: enabled && _isEmergencyVehicle,
+        status: enabled
+            ? 'Driving Mode is active in the background.'
+            : 'Driving Mode is off. Nearby scanning has stopped.',
+      );
+      return;
+    }
     if (event['type'] == 'error') {
       state = state.copyWith(status: 'Bluetooth error: ${event['message']}');
       return;

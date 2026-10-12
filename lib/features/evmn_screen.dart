@@ -23,14 +23,11 @@ class EvmnScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Row(
           children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: _blue.withValues(alpha: .1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.hub_rounded, color: _blue, size: 20),
+            Image.asset(
+              'assets/evmn_logo.png',
+              width: 38,
+              height: 38,
+              semanticLabel: 'EVMN Bluetooth road logo',
             ),
             const SizedBox(width: 10),
             const Text(
@@ -116,18 +113,30 @@ class EvmnScreen extends ConsumerWidget {
       const SizedBox(height: 24),
       Card(
         child: SwitchListTile(
-          secondary: Icon(
-            Icons.directions_car_filled,
-            color: state.drivingMode ? _blue : const Color(0xff667085),
-          ),
+          secondary: state.drivingModeStarting
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                )
+              : Icon(
+                  Icons.directions_car_filled,
+                  color: state.drivingMode ? _blue : const Color(0xff667085),
+                ),
           title: const Text('Driving Mode', style: TextStyle(fontWeight: FontWeight.w800)),
-          subtitle: Text(state.drivingMode
+          subtitle: Text(state.drivingModeStarting
+              ? 'Starting Driving Mode…'
+              : state.drivingMode
               ? state.vehicleType.toLowerCase() == 'ambulance' || state.role == 'Temporary Patient Transport'
                   ? 'Emergency alert is active for this vehicle'
                   : 'Listening for nearby emergency alerts'
-              : 'Turn on to connect to nearby vehicles'),
+              : state.status.startsWith('Driving Mode could not start') ||
+                    state.status.startsWith('Nearby-device permission') ||
+                    state.status.startsWith('Turn on Bluetooth')
+                  ? state.status
+                  : 'Turn on to connect to nearby vehicles'),
           value: state.drivingMode,
-          onChanged: controller.setDrivingMode,
+          onChanged: state.drivingModeStarting ? null : controller.setDrivingMode,
         ),
       ),
       const SizedBox(height: 10),
