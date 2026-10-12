@@ -24,7 +24,7 @@ EVMN is an offline-first Flutter prototype that exchanges emergency-awareness al
 
 ### Download for Android
 
-Download the latest Android APK directly from [GitHub Releases](https://github.com/Bhavish49/EVMN/releases/latest/download/app-release.apk). If no APK is available yet, build one locally with `flutter build apk --release`; it is created at `build/app/outputs/flutter-apk/app-release.apk`.
+Download the latest Android APK directly from [GitHub Releases](https://github.com/Bhavish49/EVMN/releases/latest/download/app-release-v2.apk). If no APK is available yet, build one locally with `flutter build apk --release`; it is created at `build/app/outputs/flutter-apk/app-release.apk`.
 
 Fetch Flutter dependencies, then launch on a supported target:
 

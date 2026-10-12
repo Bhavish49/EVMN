@@ -358,7 +358,7 @@ class DrivingModeService : Service(), TextToSpeech.OnInitListener {
             PendingIntent.getActivity(this, 7403, it, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+            .setSmallIcon(R.drawable.ic_stat_evmn)
             .setContentTitle("You are in Driving Mode")
             .setContentText(if (text.isBlank()) "Tap to open EVMN and manage Driving Mode" else text)
             .setOngoing(true)
